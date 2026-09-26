@@ -1,0 +1,90 @@
+/* ==========================================================================
+   MedTrace design tokens
+   Palette: calm clinical blues/teals on a soft neumorphic base, with
+   frosted glass panels layered on top. Risk colors are fixed system-wide.
+   ========================================================================== */
+
+:root {
+  /* -- Base surface (neumorphic) -- */
+  --base-100: #eef3f5;      /* page background */
+  --base-200: #e6edf0;      /* card resting surface */
+  --base-300: #dbe4e8;      /* pressed / inset surface */
+  --base-shadow-light: #ffffff;
+  --base-shadow-dark: #b9c8cf;
+
+  /* -- Glass layer -- */
+  --glass-fill: rgba(255, 255, 255, 0.52);
+  --glass-fill-strong: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-border-soft: rgba(184, 205, 211, 0.4);
+
+  /* -- Ink / text -- */
+  --ink-900: #142832;
+  --ink-700: #35505c;
+  --ink-500: #5c7986;
+  --ink-300: #90a9b3;
+
+  /* -- Brand teal -- */
+  --teal-700: #0d6e70;
+  --teal-600: #12878a;
+  --teal-500: #1ba3a6;
+  --teal-400: #5fc4c6;
+  --teal-100: #d7f0f0;
+
+  /* -- Clinical blue accent -- */
+  --blue-600: #2f6690;
+  --blue-400: #6fa3c7;
+  --blue-100: #dcebf5;
+
+  /* -- Risk system (fixed meaning, never reused for anything else) -- */
+  --risk-critical: #dc2626;
+  --risk-critical-bg: #fde3e1;
+  --risk-high: #d97706;
+  --risk-high-bg: #fbe8cf;
+  --risk-medium: #ca8a04;
+  --risk-medium-bg: #faf0c5;
+  --risk-low: #15803d;
+  --risk-low-bg: #dcf3e3;
+
+  /* -- Type -- */
+  --font-ui: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --fs-display: clamp(1.9rem, 1.6rem + 1.2vw, 2.5rem);
+  --fs-h1: 1.5rem;
+  --fs-h2: 1.2rem;
+  --fs-h3: 1.02rem;
+  --fs-body: 0.92rem;
+  --fs-small: 0.8rem;
+  --fs-micro: 0.7rem;
+
+  /* -- Radius -- */
+  --r-lg: 22px;
+  --r-md: 16px;
+  --r-sm: 10px;
+  --r-pill: 999px;
+
+  /* -- Neumorphic shadow pairs -- */
+  --neu-raised: 7px 7px 16px var(--base-shadow-dark), -7px -7px 16px var(--base-shadow-light);
+  --neu-raised-sm: 4px 4px 10px var(--base-shadow-dark), -4px -4px 10px var(--base-shadow-light);
+  --neu-inset: inset 5px 5px 12px var(--base-shadow-dark), inset -5px -5px 12px var(--base-shadow-light);
+  --neu-inset-sm: inset 3px 3px 7px var(--base-shadow-dark), inset -3px -3px 7px var(--base-shadow-light);
+
+  /* -- Motion -- */
+  --spring-fast: 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-med: 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --spring-fast: 1ms linear;
+    --spring-med: 1ms linear;
+  }
+}
+
+/* Utility: risk color lookups applied via data-risk attribute */
+[data-risk="CRITICAL"] { --risk-c: var(--risk-critical); --risk-bg: var(--risk-critical-bg); }
+[data-risk="HIGH"]     { --risk-c: var(--risk-high);     --risk-bg: var(--risk-high-bg); }
+[data-risk="MEDIUM"]   { --risk-c: var(--risk-medium);   --risk-bg: var(--risk-medium-bg); }
+[data-risk="LOW"]      { --risk-c: var(--risk-low);      --risk-bg: var(--risk-low-bg); }
+[data-risk="OK"]       { --risk-c: var(--risk-low);      --risk-bg: var(--risk-low-bg); }

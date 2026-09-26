@@ -2,3 +2,6 @@
 *.pyc
 backend/data/medtrace.db
 backend/venv/
+backend/venv310/
+frontend/node_modules/
+frontend/dist/

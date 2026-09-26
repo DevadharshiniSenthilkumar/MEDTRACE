@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, File, UploadFile
+﻿from fastapi import FastAPI, HTTPException, Query, File, UploadFile
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import sqlite3
@@ -42,6 +42,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 class HealthCheckResponse(BaseModel):
     status: str
     app: str
@@ -470,7 +481,7 @@ def get_dashboard_summary():
             elif status_out.status == "WATCH":
                 watch_count += 1
                 facilities_at_risk_set.add(fac_id)
-            elif status_out.status == "UNKNOWN — verify":
+            elif status_out.status == "UNKNOWN â€” verify":
                 unverified_count += 1
                 facilities_at_risk_set.add(fac_id)
             else:
@@ -687,7 +698,7 @@ def simulate_verification(payload: SimulateVerificationIn):
         cursor.execute("UPDATE rescue_cases SET status = 'RE_REVIEW_REQUIRED', risk_level = ? WHERE case_id = ?;", (after_risk_level, payload.case_id))
         reasoning = (
             f"Officer submitted physical count {payload.corrected_physical_count}. "
-            f"Case was already APPROVED (transfer in motion) — flagged for officer re-review rather than auto-cancelled."
+            f"Case was already APPROVED (transfer in motion) â€” flagged for officer re-review rather than auto-cancelled."
         )
     else:
         if after_risk_level in ("LOW", "OK") or after_status == "OK" or after_days_rem > 10.0:
@@ -795,3 +806,4 @@ def get_rescue_case_details(case_id: int):
         "analysis": analysis,
         "transfer_recommendation": transfer_rec
     }
+

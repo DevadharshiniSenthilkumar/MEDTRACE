@@ -1,0 +1,300 @@
+@import "./tokens.css";
+
+/* ======================= Landing ======================= */
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  max-width: 640px;
+  margin: 40px auto 0;
+}
+
+.landing-hero .brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--teal-700);
+}
+
+.landing-hero h1 {
+  font-size: var(--fs-display);
+}
+
+.dropzone {
+  border: 2px dashed var(--glass-border-soft);
+  border-radius: var(--r-md);
+  padding: 28px;
+  text-align: center;
+  color: var(--ink-500);
+  transition: border-color var(--spring-fast), background var(--spring-fast);
+}
+
+.dropzone.dragging {
+  border-color: var(--teal-500);
+  background: var(--teal-100);
+}
+
+.dropzone input { display: none; }
+
+.report-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-small);
+}
+
+.report-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+}
+
+.report-item.error { background: var(--risk-critical-bg); color: var(--risk-critical); }
+.report-item.warning { background: var(--risk-high-bg); color: var(--risk-high); }
+
+.divider-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-300);
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+
+.divider-or::before, .divider-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border-soft);
+}
+
+/* ======================= Rescue queue ======================= */
+
+.queue-reasoning {
+  color: var(--ink-500);
+  font-size: var(--fs-small);
+  max-width: 34ch;
+}
+
+/* ======================= Case detail ======================= */
+
+.case-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 900px) {
+  .case-meta-grid { grid-template-columns: 1fr; }
+}
+
+.meta-block .kpi-label { margin-bottom: 4px; }
+.meta-block .kpi-value { font-size: 1.3rem; }
+
+.chart-wrap {
+  width: 100%;
+  height: 240px;
+}
+
+.verify-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  background: var(--risk-high-bg);
+  color: var(--risk-high);
+  font-weight: 700;
+  font-size: var(--fs-small);
+  margin-top: 10px;
+}
+
+/* ======================= Transfer panel ======================= */
+
+.transfer-route {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.transfer-node {
+  flex: 1;
+  text-align: center;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--base-300);
+  box-shadow: var(--neu-inset-sm);
+}
+
+.transfer-node .node-role {
+  font-size: var(--fs-micro);
+  color: var(--ink-500);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.transfer-node .node-name {
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.transfer-arrow {
+  color: var(--teal-600);
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.fairness-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-small);
+  color: var(--risk-low);
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* ======================= Simulator ======================= */
+
+.sim-compare {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+@media (max-width: 700px) {
+  .sim-compare { grid-template-columns: 1fr; }
+}
+
+.sim-panel {
+  padding: 18px;
+  border-radius: var(--r-md);
+  background: var(--base-300);
+  box-shadow: var(--neu-inset-sm);
+  text-align: center;
+}
+
+.sim-panel .sim-tag {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: var(--ink-500);
+  margin-bottom: 10px;
+}
+
+.sim-panel .sim-score {
+  font-family: var(--font-data);
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.sim-arrow {
+  font-size: 1.6rem;
+  color: var(--teal-600);
+  text-align: center;
+}
+
+.sim-narrative {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  background: var(--teal-100);
+  color: var(--teal-700);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+/* ======================= Facility detail ======================= */
+
+.facility-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+/* ======================= Surplus explorer ======================= */
+
+.surplus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.expiry-tag {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: var(--risk-high);
+  background: var(--risk-high-bg);
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  display: inline-block;
+  margin-top: 8px;
+}
+
+/* ======================= Root causes ======================= */
+
+.evidence-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidence-list li {
+  font-size: var(--fs-small);
+  color: var(--ink-700);
+  padding-left: 16px;
+  position: relative;
+}
+
+.evidence-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--teal-500);
+}
+
+.cause-label {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--teal-700);
+  background: var(--teal-100);
+  padding: 4px 11px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-small);
+  margin-bottom: 8px;
+}
+
+/* ======================= History ======================= */
+
+.outcome-tag {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+}
+
+.outcome-tag.correct { background: var(--risk-low-bg); color: var(--risk-low); }
+.outcome-tag.incorrect { background: var(--risk-critical-bg); color: var(--risk-critical); }
+.outcome-tag.pending { background: var(--base-300); color: var(--ink-500); }
