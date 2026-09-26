@@ -4,7 +4,7 @@ from datetime import datetime
 from app.surplus_engine import distance_km, find_eligible_donors
 from app.transfer_optimizer import optimize_rescue_transfer
 from app.stockout_risk_engine import compute_stockout_risk, save_rescue_case
-from app.main import simulate_verification, get_facility_medicine_analysis, generate_demo_data, get_db_connection
+from app.main import simulate_verification, get_facility_medicine_analysis, generate_demo_data, get_db_connection, get_rescue_case_details
 from app.schemas import SimulateVerificationIn
 
 @pytest.fixture
@@ -196,3 +196,25 @@ def test_rescue_cases_persistence():
     conn.close()
 
     assert count > 0, "rescue_cases table must contain persisted risk cases after demo data generation."
+
+def test_cancelled_or_low_risk_case_suppresses_recommendation():
+    generate_demo_data()
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT case_id FROM rescue_cases WHERE status = 'OPEN' AND risk_level IN ('CRITICAL', 'HIGH') LIMIT 1;")
+    row = c.fetchone()
+    case_id = row["case_id"]
+    conn.close()
+
+    # Simulate physical count update to reduce risk to LOW and status to CANCELLED
+    sim_out = simulate_verification(SimulateVerificationIn(case_id=case_id, corrected_physical_count=2000.0, notes="Massive stock verified"))
+    assert sim_out.status_action == "CANCELLED"
+    assert sim_out.after["recommendation"]["status"] == "NOT_NEEDED"
+
+    # Now verify GET /rescue-cases/{case_id} suppresses active recommendation
+    details = get_rescue_case_details(case_id)
+    assert details["case"]["status"] == "CANCELLED"
+    assert details["transfer_recommendation"]["status"] == "NOT_NEEDED"
+    assert "No transfer recommended" in details["transfer_recommendation"]["reason"]
+

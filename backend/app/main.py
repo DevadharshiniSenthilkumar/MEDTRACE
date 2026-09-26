@@ -321,6 +321,30 @@ def get_recommend_transfer(
     conn.close()
     return TransferRecommendation(**result)
 
+def get_transfer_recommendation_for_case(
+    conn: sqlite3.Connection,
+    facility_id: str,
+    medicine_id: str,
+    case_status: str,
+    risk_level: str
+) -> Dict[str, Any]:
+    if case_status == "OPEN" and risk_level in ("CRITICAL", "HIGH"):
+        return optimize_rescue_transfer(conn, recipient_facility_id=facility_id, medicine_id=medicine_id)
+    else:
+        return {
+            "status": "NOT_NEEDED",
+            "reason": f"No transfer recommended: Case status is '{case_status}' and risk level is '{risk_level}'.",
+            "donor_facility_id": None,
+            "donor_facility_name": None,
+            "recipient_facility_id": facility_id,
+            "recipient_facility_name": None,
+            "quantity": 0.0,
+            "distance_km": 0.0,
+            "fairness_proof": "N/A",
+            "alternative_considered": None,
+            "covers_days": 0.0
+        }
+
 @app.post("/simulate-verification", response_model=SimulateVerificationOut, summary="Counterfactual Simulator")
 def simulate_verification(payload: SimulateVerificationIn):
     conn = get_db_connection()
@@ -338,7 +362,14 @@ def simulate_verification(payload: SimulateVerificationIn):
 
     # Capture BEFORE state
     before_analysis = get_facility_medicine_analysis(fac_id, med_id).model_dump()
-    before_rec = optimize_rescue_transfer(conn, recipient_facility_id=fac_id, medicine_id=med_id)
+    before_risk_level = before_analysis["risk_assessment"]["risk_level"]
+    before_rec = get_transfer_recommendation_for_case(
+        conn=conn,
+        facility_id=fac_id,
+        medicine_id=med_id,
+        case_status=existing_status,
+        risk_level=before_risk_level
+    )
 
     # 1. Update latest inventory record with corrected physical count
     cursor.execute("""
@@ -362,24 +393,24 @@ def simulate_verification(payload: SimulateVerificationIn):
 
     # Re-run 5-step pipeline: Inventory -> Stock Truth -> Risk -> Surplus -> Transfer Optimizer
     after_analysis = get_facility_medicine_analysis(fac_id, med_id).model_dump()
-    after_rec = optimize_rescue_transfer(conn, recipient_facility_id=fac_id, medicine_id=med_id)
+    after_risk_level = after_analysis["risk_assessment"]["risk_level"]
+    after_status = after_analysis["inventory_status"]["status"]
+    after_days_rem = after_analysis["inventory_status"]["days_remaining"]
 
     # Determine status action
     if existing_status == "APPROVED":
         status_action = "RE_REVIEW_REQUIRED"
-        cursor.execute("UPDATE rescue_cases SET status = 'RE_REVIEW_REQUIRED' WHERE case_id = ?;", (payload.case_id,))
+        new_case_status = "RE_REVIEW_REQUIRED"
+        cursor.execute("UPDATE rescue_cases SET status = 'RE_REVIEW_REQUIRED', risk_level = ? WHERE case_id = ?;", (after_risk_level, payload.case_id))
         reasoning = (
             f"Officer submitted physical count {payload.corrected_physical_count}. "
             f"Case was already APPROVED (transfer in motion) — flagged for officer re-review rather than auto-cancelled."
         )
     else:
-        after_risk_level = after_analysis["risk_assessment"]["risk_level"]
-        after_status = after_analysis["inventory_status"]["status"]
-        after_days_rem = after_analysis["inventory_status"]["days_remaining"]
-
         if after_risk_level in ("LOW", "OK") or after_status == "OK" or after_days_rem > 10.0:
             status_action = "CANCELLED"
-            cursor.execute("UPDATE rescue_cases SET status = 'CANCELLED' WHERE case_id = ?;", (payload.case_id,))
+            new_case_status = "CANCELLED"
+            cursor.execute("UPDATE rescue_cases SET status = 'CANCELLED', risk_level = ? WHERE case_id = ?;", (after_risk_level, payload.case_id))
             reasoning = (
                 f"Counterfactual simulator result: Physical stock verified as {payload.corrected_physical_count} units "
                 f"(days remaining: {after_days_rem:.1f}). Risk reduced from {before_analysis['risk_assessment']['risk_level']} "
@@ -387,13 +418,23 @@ def simulate_verification(payload: SimulateVerificationIn):
             )
         else:
             status_action = "UPDATED"
-            cursor.execute("UPDATE rescue_cases SET status = 'OPEN' WHERE case_id = ?;", (payload.case_id,))
+            new_case_status = "OPEN"
+            cursor.execute("UPDATE rescue_cases SET status = 'OPEN', risk_level = ? WHERE case_id = ?;", (after_risk_level, payload.case_id))
             reasoning = (
                 f"Counterfactual simulator result: Physical stock updated to {payload.corrected_physical_count} units. "
                 f"Risk level is now {after_risk_level} (Truth Score: {after_analysis['stock_truth']['total']:.1f})."
             )
 
     conn.commit()
+
+    after_rec = get_transfer_recommendation_for_case(
+        conn=conn,
+        facility_id=fac_id,
+        medicine_id=med_id,
+        case_status=new_case_status,
+        risk_level=after_risk_level
+    )
+
     conn.close()
 
     return SimulateVerificationOut(
@@ -452,9 +493,18 @@ def get_rescue_case_details(case_id: int):
     case_dict = dict(row)
     fac_id = case_dict["facility_id"]
     med_id = case_dict["medicine_id"]
+    current_status = case_dict.get("status", "OPEN")
 
     analysis = get_facility_medicine_analysis(fac_id, med_id)
-    transfer_rec = optimize_rescue_transfer(conn, recipient_facility_id=fac_id, medicine_id=med_id)
+    current_risk_level = analysis.risk_assessment.risk_level
+
+    transfer_rec = get_transfer_recommendation_for_case(
+        conn=conn,
+        facility_id=fac_id,
+        medicine_id=med_id,
+        case_status=current_status,
+        risk_level=current_risk_level
+    )
     conn.close()
 
     return {
