@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, File, UploadFile
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import sqlite3
+import csv
+import io
 from datetime import datetime
 
 from app.database import init_db, get_db_connection
@@ -16,14 +18,22 @@ from app.schemas import (
     TransferRecommendation,
     SimulateVerificationIn,
     SimulateVerificationOut,
-    RescueCaseOut
+    RescueCaseOut,
+    FacilityOut,
+    FacilityDetailOut,
+    UploadErrorWarning,
+    UploadReport,
+    FeedbackIn,
+    FeedbackOut,
+    FeedbackHistoryItemOut,
+    SurplusSummaryOut
 )
 from app.synthetic_data import generate_demo_dataset
 from app.inventory_engine import compute_inventory_status
 from app.forecast_engine import compute_demand_forecast
 from app.stock_truth_engine import compute_stock_truth_score
 from app.stockout_risk_engine import compute_stockout_risk, save_rescue_case
-from app.surplus_engine import find_eligible_donors, find_near_expiry_matches
+from app.surplus_engine import find_eligible_donors, find_near_expiry_matches, get_all_surplus_and_near_expiry
 from app.transfer_optimizer import optimize_rescue_transfer
 
 app = FastAPI(
@@ -48,6 +58,279 @@ def get_health():
         app="MedTrace Backend",
         version="1.0.0"
     )
+
+@app.get("/facilities", response_model=List[FacilityOut], summary="List All Facilities")
+def get_facilities():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT facility_id, name, lat, lon, facility_type, is_remote, reporting_interval_days FROM facilities ORDER BY facility_id;")
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        FacilityOut(
+            facility_id=r["facility_id"],
+            name=r["name"],
+            lat=float(r["lat"]),
+            lon=float(r["lon"]),
+            facility_type=r["facility_type"],
+            is_remote=bool(r["is_remote"]),
+            reporting_interval_days=int(r["reporting_interval_days"])
+        )
+        for r in rows
+    ]
+
+@app.get("/facilities/{facility_id}", response_model=FacilityDetailOut, summary="Get Facility Details with Medicine Analysis")
+def get_facility_details(facility_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT facility_id, name, lat, lon, facility_type, is_remote, reporting_interval_days FROM facilities WHERE facility_id = ?;", (facility_id,))
+    fac_row = cursor.fetchone()
+    if not fac_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail=f"Facility '{facility_id}' not found.")
+
+    facility_out = FacilityOut(
+        facility_id=fac_row["facility_id"],
+        name=fac_row["name"],
+        lat=float(fac_row["lat"]),
+        lon=float(fac_row["lon"]),
+        facility_type=fac_row["facility_type"],
+        is_remote=bool(fac_row["is_remote"]),
+        reporting_interval_days=int(fac_row["reporting_interval_days"])
+    )
+
+    cursor.execute("SELECT DISTINCT medicine_id FROM inventory_records WHERE facility_id = ?;", (facility_id,))
+    med_rows = cursor.fetchall()
+    conn.close()
+
+    med_analyses = []
+    for r in med_rows:
+        try:
+            analysis = get_facility_medicine_analysis(facility_id, r["medicine_id"])
+            med_analyses.append(analysis)
+        except Exception:
+            continue
+
+    return FacilityDetailOut(
+        facility=facility_out,
+        medicines=med_analyses
+    )
+
+@app.post("/upload-inventory", response_model=UploadReport, summary="Upload Inventory Records via CSV")
+async def upload_inventory(file: UploadFile = File(...)):
+    contents = await file.read()
+    if not contents:
+        return UploadReport(
+            rows_processed=0,
+            accepted=False,
+            errors=[UploadErrorWarning(row=0, message="CSV file is empty.")],
+            warnings=[]
+        )
+
+    try:
+        decoded_text = contents.decode("utf-8-sig")
+    except Exception as e:
+        return UploadReport(
+            rows_processed=0,
+            accepted=False,
+            errors=[UploadErrorWarning(row=0, message=f"Failed to decode file encoding: {str(e)}")],
+            warnings=[]
+        )
+
+    reader = csv.DictReader(io.StringIO(decoded_text))
+    if not reader.fieldnames:
+        return UploadReport(
+            rows_processed=0,
+            accepted=False,
+            errors=[UploadErrorWarning(row=0, message="CSV file has no header row.")],
+            warnings=[]
+        )
+
+    field_map = {name.strip().lower(): name for name in reader.fieldnames if name}
+    required_fields = ["facility_id", "medicine_id", "record_date", "opening_stock", "received", "issued"]
+    missing_fields = [f for f in required_fields if f not in field_map]
+    if missing_fields:
+        return UploadReport(
+            rows_processed=0,
+            accepted=False,
+            errors=[UploadErrorWarning(row=0, message=f"Missing required CSV column(s): {', '.join(missing_fields)}")],
+            warnings=[]
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT facility_id FROM facilities;")
+    valid_fac_ids = {r["facility_id"] for r in cursor.fetchall()}
+    cursor.execute("SELECT medicine_id FROM medicine_config;")
+    valid_med_ids = {r["medicine_id"] for r in cursor.fetchall()}
+
+    rows_processed = 0
+    errors: List[UploadErrorWarning] = []
+    warnings: List[UploadErrorWarning] = []
+    records_to_insert = []
+
+    seen_in_batch = set()
+
+    for idx, row in enumerate(reader, start=1):
+        rows_processed += 1
+        fac_id = (row.get(field_map["facility_id"]) or "").strip()
+        med_id = (row.get(field_map["medicine_id"]) or "").strip()
+        rec_date = (row.get(field_map["record_date"]) or "").strip()
+        opening_str = row.get(field_map["opening_stock"])
+        received_str = row.get(field_map["received"])
+        issued_str = row.get(field_map["issued"])
+        expiry_key = field_map.get("batch_expiry_date")
+        exp_date = (row.get(expiry_key) or "").strip() if expiry_key else None
+
+        if not fac_id or not med_id or not rec_date:
+            errors.append(UploadErrorWarning(row=idx, message="Row contains empty facility_id, medicine_id, or record_date."))
+            continue
+
+        try:
+            datetime.strptime(rec_date, "%Y-%m-%d")
+        except ValueError:
+            errors.append(UploadErrorWarning(row=idx, message=f"Invalid record_date '{rec_date}'. Date must be in YYYY-MM-DD format."))
+            continue
+
+        if valid_fac_ids and fac_id not in valid_fac_ids:
+            errors.append(UploadErrorWarning(row=idx, message=f"Facility '{fac_id}' does not exist."))
+            continue
+
+        if valid_med_ids and med_id not in valid_med_ids:
+            errors.append(UploadErrorWarning(row=idx, message=f"Medicine '{med_id}' does not exist."))
+            continue
+
+        try:
+            opening = float(opening_str)
+            received = float(received_str) if received_str is not None and str(received_str).strip() != "" else 0.0
+            issued = float(issued_str) if issued_str is not None and str(issued_str).strip() != "" else 0.0
+        except (ValueError, TypeError):
+            errors.append(UploadErrorWarning(row=idx, message="Numerical fields (opening_stock, received, issued) must be valid numbers."))
+            continue
+
+        if opening < 0 or received < 0 or issued < 0:
+            errors.append(UploadErrorWarning(row=idx, message="Stock quantities cannot be negative."))
+            continue
+
+        cursor.execute("""
+            SELECT 1 FROM inventory_records
+            WHERE facility_id = ? AND medicine_id = ? AND record_date = ?;
+        """, (fac_id, med_id, rec_date))
+        if cursor.fetchone():
+            errors.append(UploadErrorWarning(
+                row=idx,
+                message=f"Duplicate inventory record for facility '{fac_id}', medicine '{med_id}', and date '{rec_date}' (UNIQUE constraint)."
+            ))
+            continue
+
+        key = (fac_id, med_id, rec_date)
+        if key in seen_in_batch:
+            errors.append(UploadErrorWarning(
+                row=idx,
+                message=f"Duplicate inventory record in CSV batch for facility '{fac_id}', medicine '{med_id}', and date '{rec_date}'."
+            ))
+            continue
+        seen_in_batch.add(key)
+
+        closing = opening + received - issued
+
+        records_to_insert.append((fac_id, med_id, rec_date, opening, received, issued, closing, exp_date))
+
+    if rows_processed == 0:
+        conn.close()
+        return UploadReport(
+            rows_processed=0,
+            accepted=False,
+            errors=[UploadErrorWarning(row=0, message="CSV file contains no data rows.")],
+            warnings=[]
+        )
+
+    accepted = len(errors) == 0
+
+    if accepted and records_to_insert:
+        for r in records_to_insert:
+            cursor.execute("""
+                INSERT INTO inventory_records (facility_id, medicine_id, record_date, opening_stock, received, issued, closing_stock, batch_expiry_date, is_reported)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1);
+            """, r)
+        conn.commit()
+
+    conn.close()
+
+    return UploadReport(
+        rows_processed=rows_processed,
+        accepted=accepted,
+        errors=errors,
+        warnings=warnings
+    )
+
+@app.post("/feedback", response_model=FeedbackOut, summary="Submit Officer Feedback for a Rescue Case")
+def submit_feedback(payload: FeedbackIn):
+    if payload.officer_decision not in ("APPROVED", "REJECTED", "VERIFIED"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid officer decision '{payload.officer_decision}'. Must be APPROVED, REJECTED, or VERIFIED."
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT case_id FROM rescue_cases WHERE case_id = ?;", (payload.case_id,))
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail=f"Rescue case with ID {payload.case_id} not found.")
+
+    cursor.execute("""
+        INSERT INTO feedback (case_id, officer_decision, notes)
+        VALUES (?, ?, ?);
+    """, (payload.case_id, payload.officer_decision, payload.notes))
+    conn.commit()
+
+    feedback_id = cursor.lastrowid
+    cursor.execute("SELECT feedback_id, case_id, officer_decision, notes, decided_at FROM feedback WHERE feedback_id = ?;", (feedback_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return FeedbackOut(
+        feedback_id=row["feedback_id"],
+        case_id=row["case_id"],
+        officer_decision=row["officer_decision"],
+        notes=row["notes"],
+        decided_at=str(row["decided_at"])
+    )
+
+@app.get("/feedback", response_model=List[FeedbackHistoryItemOut], summary="Get All Officer Feedback History")
+def get_feedback_history():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT f.feedback_id, f.case_id, r.facility_id, r.medicine_id, r.risk_level, f.officer_decision, f.notes, f.decided_at
+        FROM feedback f
+        LEFT JOIN rescue_cases r ON f.case_id = r.case_id
+        ORDER BY f.decided_at DESC, f.feedback_id DESC;
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        FeedbackHistoryItemOut(
+            feedback_id=r["feedback_id"],
+            case_id=r["case_id"],
+            facility_id=r["facility_id"],
+            medicine_id=r["medicine_id"],
+            risk_level=r["risk_level"],
+            officer_decision=r["officer_decision"],
+            notes=r["notes"],
+            decided_at=str(r["decided_at"])
+        )
+        for r in rows
+    ]
+
+@app.get("/surplus", response_model=SurplusSummaryOut, summary="Get Standalone Surplus and Expiry Data")
+def get_surplus_summary():
+    conn = get_db_connection()
+    res = get_all_surplus_and_near_expiry(conn)
+    conn.close()
+    return SurplusSummaryOut(**res)
 
 @app.post("/generate-demo-data", response_model=DemoDataGenerationResponse, summary="Generate Demo Data")
 def generate_demo_data():

@@ -232,3 +232,42 @@ def find_near_expiry_matches(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
 
     matches.sort(key=lambda x: (x["days_to_expiry"], x["distance_km"]))
     return matches
+
+def get_all_surplus_and_near_expiry(conn: sqlite3.Connection) -> Dict[str, Any]:
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT facility_id, medicine_id FROM inventory_records;")
+    pairs = cursor.fetchall()
+    
+    cursor.execute("SELECT facility_id, name FROM facilities;")
+    fac_names = {r["facility_id"]: r["name"] for r in cursor.fetchall()}
+    cursor.execute("SELECT medicine_id, name FROM medicine_config;")
+    med_names = {r["medicine_id"]: r["name"] for r in cursor.fetchall()}
+
+    eligible_surplus = []
+    for pair in pairs:
+        f_id = pair["facility_id"]
+        m_id = pair["medicine_id"]
+        info = get_facility_stock_and_truth(conn, f_id, m_id)
+        if not info:
+            continue
+        if info["donor_surplus"] > 0 and info["stock_truth_score"] >= TRUTH_THRESHOLD:
+            eligible_surplus.append({
+                "facility_id": f_id,
+                "facility_name": fac_names.get(f_id, info["name"]),
+                "medicine_id": m_id,
+                "medicine_name": med_names.get(m_id, m_id),
+                "current_stock": round(info["current_stock"], 1),
+                "safety_stock": round(info["safety_stock"], 1),
+                "donor_surplus": round(info["donor_surplus"], 1),
+                "stock_truth_score": round(info["stock_truth_score"], 1),
+                "latest_record_date": info["latest_record_date"],
+                "batch_expiry_date": info["batch_expiry_date"]
+            })
+
+    near_expiry_matches = find_near_expiry_matches(conn)
+
+    return {
+        "eligible_surplus": eligible_surplus,
+        "near_expiry_candidates": near_expiry_matches
+    }
+

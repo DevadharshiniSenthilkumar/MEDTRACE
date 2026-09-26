@@ -136,3 +136,52 @@ class FeedbackIn(BaseModel):
     case_id: int
     officer_decision: str  # APPROVED, REJECTED, VERIFIED
     notes: Optional[str] = None
+
+class FacilityDetailOut(BaseModel):
+    facility: FacilityOut
+    medicines: List[FacilityMedicineAnalysisOut]
+
+class UploadErrorWarning(BaseModel):
+    row: int
+    message: str
+
+class UploadReport(BaseModel):
+    rows_processed: int
+    accepted: bool
+    errors: List[UploadErrorWarning]
+    warnings: List[UploadErrorWarning]
+
+class FeedbackOut(BaseModel):
+    feedback_id: int
+    case_id: int
+    officer_decision: str
+    notes: Optional[str] = None
+    decided_at: str
+
+class SurplusItemOut(BaseModel):
+    facility_id: str
+    facility_name: str
+    medicine_id: str
+    medicine_name: str
+    current_stock: float
+    safety_stock: float
+    donor_surplus: float
+    stock_truth_score: float
+    latest_record_date: Optional[str] = None
+    batch_expiry_date: Optional[str] = None
+
+class SurplusSummaryOut(BaseModel):
+    eligible_surplus: List[SurplusItemOut]
+    near_expiry_candidates: List[dict]
+
+class FeedbackHistoryItemOut(BaseModel):
+    feedback_id: int
+    case_id: int
+    facility_id: Optional[str] = None
+    medicine_id: Optional[str] = None
+    risk_level: Optional[str] = None
+    officer_decision: str
+    notes: Optional[str] = None
+    decided_at: str
+
+
