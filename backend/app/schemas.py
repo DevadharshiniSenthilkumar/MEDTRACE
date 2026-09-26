@@ -91,8 +91,11 @@ class FacilityMedicineAnalysisOut(BaseModel):
     risk_assessment: RiskOut
 
 class TransferRecommendation(BaseModel):
-    donor_facility_id: str
+    status: str = "RECOMMENDED"
+    donor_facility_id: Optional[str] = None
+    donor_facility_name: Optional[str] = None
     recipient_facility_id: str
+    recipient_facility_name: Optional[str] = None
     quantity: float
     distance_km: float
     reason: str
@@ -100,9 +103,28 @@ class TransferRecommendation(BaseModel):
     alternative_considered: Optional[str] = None
     covers_days: float
 
-class SimulationDiff(BaseModel):
+class SimulateVerificationIn(BaseModel):
+    case_id: int
+    corrected_physical_count: float
+    notes: Optional[str] = None
+
+class SimulateVerificationOut(BaseModel):
+    case_id: int
+    status_action: str  # CANCELLED, RE_REVIEW_REQUIRED, UPDATED
+    reasoning: str
     before: dict
     after: dict
+
+class RescueCaseOut(BaseModel):
+    case_id: int
+    facility_id: str
+    medicine_id: str
+    risk_level: str
+    confidence: float
+    stock_truth_score: float
+    recommended_action: str
+    created_at: str
+    status: str
 
 class RootCauseOut(BaseModel):
     facility_id: str

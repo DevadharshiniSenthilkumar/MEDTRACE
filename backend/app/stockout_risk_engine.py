@@ -1,4 +1,5 @@
 from typing import Optional
+import sqlite3
 from app.schemas import RiskOut
 
 TRUTH_THRESHOLD = 50.0
@@ -14,21 +15,6 @@ def compute_stockout_risk(
     
     Combines days-of-stock-remaining, forecast trend, and Stock Truth Score into a single risk level
     (LOW, MEDIUM, HIGH, CRITICAL, or UNVERIFIED) with a confidence score.
-    
-    Exact logic:
-    - If stock_truth_score < TRUTH_THRESHOLD (50):
-        risk_level = "UNVERIFIED"
-        recommended_action = "verify_physical_stock"
-        confidence = stock_truth_score / 100
-    - Else:
-        days_remaining <= 2  => "CRITICAL"
-        days_remaining <= 5  => "HIGH"
-        days_remaining <= 10 => "MEDIUM"
-        else                 => "LOW"
-        
-        If trend_flag == "rising": bump risk_level up one tier (capped at CRITICAL)
-        recommended_action = "consider_transfer" if risk_level in ("CRITICAL", "HIGH") else "monitor"
-        confidence = min(1.0, (stock_truth_score/100) * (1.0 if data_points>=14 else data_points/14.0))
     """
     # 1. Edge Case & Input Validation (Section 5B)
     if stock_truth_score < 0.0 or stock_truth_score > 100.0:
@@ -88,3 +74,41 @@ def compute_stockout_risk(
         recommended_action=recommended_action,
         reasoning=reasoning
     )
+
+
+def save_rescue_case(
+    conn: sqlite3.Connection,
+    facility_id: str,
+    medicine_id: str,
+    risk_level: str,
+    confidence: float,
+    stock_truth_score: float,
+    recommended_action: str
+) -> int:
+    """
+    PERSISTENCE: Every computed risk case from the Stockout Risk Engine must now be saved
+    into the rescue_cases table.
+    """
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT case_id FROM rescue_cases
+        WHERE facility_id = ? AND medicine_id = ? AND status = 'OPEN'
+        ORDER BY created_at DESC LIMIT 1;
+    """, (facility_id, medicine_id))
+    existing = cursor.fetchone()
+    if existing:
+        case_id = existing["case_id"]
+        cursor.execute("""
+            UPDATE rescue_cases
+            SET risk_level = ?, confidence = ?, stock_truth_score = ?, recommended_action = ?
+            WHERE case_id = ?;
+        """, (risk_level, confidence, stock_truth_score, recommended_action, case_id))
+        conn.commit()
+        return case_id
+    else:
+        cursor.execute("""
+            INSERT INTO rescue_cases (facility_id, medicine_id, risk_level, confidence, stock_truth_score, recommended_action, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'OPEN');
+        """, (facility_id, medicine_id, risk_level, confidence, stock_truth_score, recommended_action))
+        conn.commit()
+        return cursor.lastrowid
