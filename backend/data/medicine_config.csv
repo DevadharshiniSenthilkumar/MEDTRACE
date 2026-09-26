@@ -1,0 +1,9 @@
+medicine_id,name,unit,shelf_life_days,safety_stock_days,reorder_point_days
+MED_001,Insulin (Human 100IU/ml),Vial,365,7,14
+MED_002,ORS (Oral Rehydration Salts),Sachet,730,5,10
+MED_003,Rifampicin (Anti-TB 150mg),Tablet,540,10,20
+MED_004,Polyvalent Antivenom,Vial,365,5,10
+MED_005,Amoxicillin 500mg,Capsule,730,5,10
+MED_006,Paracetamol 500mg,Tablet,1095,3,7
+MED_007,Metformin 500mg,Tablet,1095,5,10
+MED_008,Atorvastatin 10mg,Tablet,730,5,10

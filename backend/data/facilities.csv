@@ -1,0 +1,21 @@
+facility_id,name,lat,lon,facility_type,is_remote,reporting_interval_days
+FAC_001,Central District Warehouse,12.9716,77.5946,WAREHOUSE,False,1
+FAC_002,North Regional Store,13.0352,77.597,WAREHOUSE,False,1
+FAC_003,East Zone Depot,12.9698,77.75,WAREHOUSE,False,1
+FAC_004,PHC Indiranagar,12.9784,77.6408,PHC,False,2
+FAC_005,PHC Jayanagar,12.925,77.5938,PHC,False,2
+FAC_006,PHC Malleshwaram,13.0031,77.5643,PHC,False,2
+FAC_007,PHC Koramangala,12.9352,77.6245,PHC,False,2
+FAC_008,PHC Whitefield,12.9698,77.7499,PHC,False,2
+FAC_009,PHC Yelahanka,13.1007,77.5963,PHC,False,2
+FAC_010,PHC Hebbal,13.0358,77.597,PHC,False,2
+FAC_011,PHC Rajajinagar,12.9982,77.553,PHC,False,2
+FAC_012,PHC Banashankari,12.9255,77.5468,PHC,False,2
+FAC_013,PHC Electronic City,12.8452,77.6602,PHC,False,2
+FAC_014,PHC Marathahalli,12.9591,77.6974,PHC,False,2
+FAC_015,PHC Kengeri (Remote),12.9081,77.4842,PHC,True,3
+FAC_016,PHC Anekal (Remote),12.7103,77.6974,PHC,True,4
+FAC_017,PHC Nelamangala (Remote),13.0984,77.3948,PHC,True,4
+FAC_018,PHC Hoskote,13.0725,77.7981,PHC,False,2
+FAC_019,PHC Devanahalli,13.2482,77.7127,PHC,False,3
+FAC_020,PHC Doddaballapur,13.2925,77.5428,PHC,False,3
