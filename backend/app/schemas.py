@@ -60,7 +60,6 @@ class DemoDataGenerationResponse(BaseModel):
     seeded_cases: List[str]
     message: str
 
-# Stubs for future phases
 class ForecastOut(BaseModel):
     forecast_per_day: float
     forecast_7day: float
@@ -68,6 +67,7 @@ class ForecastOut(BaseModel):
     weights_used: List[float]
     last_14_days: List[float]
     insufficient_history: bool = False
+    reasoning: str
 
 class StockTruthOut(BaseModel):
     recency_score: float
@@ -80,6 +80,15 @@ class RiskOut(BaseModel):
     risk_level: str
     confidence: float
     recommended_action: str
+    reasoning: str
+
+class FacilityMedicineAnalysisOut(BaseModel):
+    facility_id: str
+    medicine_id: str
+    inventory_status: InventoryStatusOut
+    demand_forecast: ForecastOut
+    stock_truth: StockTruthOut
+    risk_assessment: RiskOut
 
 class TransferRecommendation(BaseModel):
     donor_facility_id: str

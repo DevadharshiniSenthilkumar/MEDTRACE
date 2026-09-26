@@ -1,8 +1,8 @@
 from typing import List, Optional
 import math
 from app.schemas import InventoryStatusOut
+from app.stock_truth_engine import compute_stock_truth_score, TRUTH_THRESHOLD
 
-TRUTH_THRESHOLD = 50.0
 CRITICAL_DAYS = 3.0
 WATCH_DAYS = 7.0
 DEFAULT_LOOKBACK_DAYS = 14
@@ -16,19 +16,19 @@ def compute_inventory_status(
     issued_history: List[float],
     safety_stock_days: int = 5,
     lookback_window_days: int = DEFAULT_LOOKBACK_DAYS,
-    truth_score: float = 100.0
+    truth_score: Optional[float] = None,
+    days_since_last_report: float = 0.0,
+    expected_interval: float = 2.0,
+    actual_reports_received: Optional[int] = None,
+    days_elapsed: float = 1.0
 ) -> InventoryStatusOut:
     """
     Computes current stock status according to Module 3 (Section 5) formulas.
     
-    Exact logic:
-    current_stock = opening_stock + received - issued
-    avg_daily_demand = sum(issued over lookback_window_days) / lookback_window_days
-    days_remaining = current_stock / avg_daily_demand if avg_daily_demand > 0 else float('inf')
-    safety_stock = safety_stock_days * avg_daily_demand
+    Integrates with Module 5 (Stock Truth Score Engine) when truth_score is not explicitly provided.
     
     Status classification:
-    - truth_score < 50: "UNKNOWN — verify"
+    - truth_score < TRUTH_THRESHOLD (50): "UNKNOWN — verify"
     - days_remaining <= 3: "CRITICAL"
     - days_remaining <= 7: "WATCH"
     - else: "OK"
@@ -56,13 +56,28 @@ def compute_inventory_status(
     recent_history = issued_history[-lookback_window_days:] if issued_history else []
     
     if recent_history:
-        # Use lookback_window_days or len(recent_history) for denominator
         effective_days = max(len(recent_history), 1)
         avg_daily_demand = sum(recent_history) / float(effective_days)
     else:
         avg_daily_demand = 0.0
 
-    # 4. Days Remaining & Safety Stock
+    # 4. Compute Real Stock Truth Score if not explicitly passed
+    if truth_score is None:
+        reports_count = actual_reports_received if actual_reports_received is not None else len(issued_history)
+        truth_res = compute_stock_truth_score(
+            days_since_last_report=days_since_last_report,
+            expected_interval=expected_interval,
+            actual_reports_received=reports_count,
+            window_days=lookback_window_days,
+            opening_stock=opening_stock,
+            received=received,
+            reported_closing=current_stock,
+            avg_daily_demand=avg_daily_demand,
+            days_elapsed=days_elapsed
+        )
+        truth_score = truth_res.total
+
+    # 5. Days Remaining & Safety Stock
     if avg_daily_demand > 0:
         days_remaining = current_stock / avg_daily_demand
     else:
@@ -70,7 +85,7 @@ def compute_inventory_status(
 
     safety_stock = safety_stock_days * avg_daily_demand
 
-    # 5. Status & Reasoning Determination
+    # 6. Status & Reasoning Determination
     reasons = []
 
     if truth_score < TRUTH_THRESHOLD:
