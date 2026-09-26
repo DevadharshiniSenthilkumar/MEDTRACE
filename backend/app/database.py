@@ -4,7 +4,7 @@ from pathlib import Path
 
 # DB Path configuration: backend/data/medtrace.db
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(os.environ.get("MEDTRACE_DATA_DIR", BASE_DIR / "data"))
 DB_PATH = DATA_DIR / "medtrace.db"
 
 def get_db_connection():

@@ -5,8 +5,9 @@ from pathlib import Path
 from app.database import get_db_connection, clear_demo_data
 from app.schemas import DemoDataGenerationResponse
 
+import os
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(os.environ.get("MEDTRACE_DATA_DIR", BASE_DIR / "data"))
 
 def generate_demo_dataset() -> DemoDataGenerationResponse:
     """
